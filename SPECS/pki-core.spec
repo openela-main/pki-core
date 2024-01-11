@@ -8,8 +8,8 @@ Name:             pki-core
 
 # Upstream version number:
 %global           major_version 11
-%global           minor_version 3
-%global           update_version 0
+%global           minor_version 4
+%global           update_version 2
 
 # Downstream release number:
 # - development/stabilization (unsupported): 0.<n> where n >= 1
@@ -170,11 +170,34 @@ BuildRequires:    openldap-devel
 BuildRequires:    pkgconfig
 BuildRequires:    policycoreutils
 
-BuildRequires:    python3-lxml
-BuildRequires:    python3-sphinx
+# Java build dependencies
+BuildRequires:    %{java_devel}
+BuildRequires:    maven-local
+%if 0%{?fedora}
+BuildRequires:    xmvn-tools
+%endif
+BuildRequires:    javapackages-tools
+BuildRequires:    mvn(commons-cli:commons-cli)
+BuildRequires:    mvn(commons-codec:commons-codec)
+BuildRequires:    mvn(commons-io:commons-io)
+BuildRequires:    mvn(org.apache.commons:commons-lang3)
+BuildRequires:    mvn(commons-logging:commons-logging)
+BuildRequires:    mvn(commons-net:commons-net)
+BuildRequires:    mvn(org.slf4j:slf4j-api)
+BuildRequires:    mvn(org.slf4j:slf4j-jdk14)
+BuildRequires:    mvn(junit:junit)
+BuildRequires:    pki-resteasy >= 3.0.26
+BuildRequires:    jss = 5.4
+BuildRequires:    tomcatjss = 8.4
+BuildRequires:    ldapjdk = 5.4
 
-BuildRequires:    resteasy >= 3.0.26
+%if 0%{?rhel} && ! 0%{?eln}
+BuildRequires:    pki-servlet-engine >= 9.0.31
+%else
+BuildRequires:    tomcat >= 1:9.0.31
+%endif
 
+# Python build dependencies
 BuildRequires:    python3 >= 3.9
 BuildRequires:    python3-devel
 BuildRequires:    python3-setuptools
@@ -184,20 +207,9 @@ BuildRequires:    python3-ldap
 BuildRequires:    python3-libselinux
 BuildRequires:    python3-requests >= 2.6.0
 BuildRequires:    python3-six
-
-BuildRequires:    junit
-BuildRequires:    jpackage-utils >= 0:1.7.5-10
-BuildRequires:    jss = 5.3
-BuildRequires:    tomcatjss = 8.3
-BuildRequires:    ldapjdk = 5.3
+BuildRequires:    python3-sphinx
 
 BuildRequires:    systemd-units
-
-%if 0%{?rhel} && ! 0%{?eln}
-BuildRequires:    pki-servlet-engine >= 9.0.31
-%else
-BuildRequires:    tomcat >= 1:9.0.31
-%endif
 
 # additional build requirements needed to build native 'tpsclient'
 # REMINDER:  Revisit these once 'tpsclient' is rewritten as a Java app
@@ -232,12 +244,13 @@ to manage enterprise Public Key Infrastructure deployments.
 
 %{product_name} consists of the following components:
 
-  * Automatic Certificate Management Environment (ACME) Responder
   * Certificate Authority (CA)
   * Key Recovery Authority (KRA)
   * Online Certificate Status Protocol (OCSP) Manager
   * Token Key Service (TKS)
   * Token Processing Service (TPS)
+  * Automatic Certificate Management Environment (ACME) Responder
+  * Enrollment over Secure Transport (EST) Responder
 
 %endif
 
@@ -290,12 +303,13 @@ to manage enterprise Public Key Infrastructure deployments.
 
 %{product_name} consists of the following components:
 
-  * Automatic Certificate Management Environment (ACME) Responder
   * Certificate Authority (CA)
   * Key Recovery Authority (KRA)
   * Online Certificate Status Protocol (OCSP) Manager
   * Token Key Service (TKS)
   * Token Processing Service (TPS)
+  * Automatic Certificate Management Environment (ACME) Responder
+  * Enrollment over Secure Transport (EST) Responder
 
 # with meta
 %endif
@@ -364,21 +378,18 @@ Obsoletes:        %{product_id}-base-java < %{version}-%{release}
 Provides:         %{product_id}-base-java = %{version}-%{release}
 
 Requires:         %{java_headless}
-Requires:         apache-commons-cli
-Requires:         apache-commons-codec
-Requires:         apache-commons-io
-Requires:         apache-commons-lang3 >= 3.2
-Requires:         apache-commons-logging
-Requires:         apache-commons-net
-Requires:         slf4j
-Requires:         slf4j-jdk14
-Requires:         jpackage-utils >= 0:1.7.5-10
-Requires:         jss = 5.3
-Requires:         ldapjdk = 5.3
+Requires:         mvn(commons-cli:commons-cli)
+Requires:         mvn(commons-codec:commons-codec)
+Requires:         mvn(commons-io:commons-io)
+Requires:         mvn(org.apache.commons:commons-lang3)
+Requires:         mvn(commons-logging:commons-logging)
+Requires:         mvn(commons-net:commons-net)
+Requires:         mvn(org.slf4j:slf4j-api)
+Requires:         mvn(org.slf4j:slf4j-jdk14)
+Requires:         jss = 5.4
+Requires:         ldapjdk = 5.4
 Requires:         %{product_id}-base = %{version}-%{release}
-Requires:         resteasy-client >= 3.0.17-1
-Requires:         resteasy-core >= 3.0.17-1
-Requires:         resteasy-jackson2-provider >= 3.0.17-1
+Requires:         pki-resteasy >= 3.0.26
 
 %description -n   %{product_id}-java
 This package provides common and client libraries for Java.
@@ -450,7 +461,7 @@ Requires:         systemd
 Requires(post):   systemd-units
 Requires(postun): systemd-units
 Requires(pre):    shadow-utils
-Requires:         tomcatjss = 8.3
+Requires:         tomcatjss = 8.4
 
 # pki-healthcheck depends on the following library
 %if 0%{?rhel}
@@ -819,6 +830,26 @@ This package provides test suite for %{product_name}.
 # (see /usr/lib/rpm/macros.d/macros.cmake)
 %set_build_flags
 
+# Remove all symbol table and relocation information from the executable.
+C_FLAGS="-s"
+
+%if 0%{?fedora}
+# https://sourceware.org/annobin/annobin.html/Test-gaps.html
+C_FLAGS="$C_FLAGS -fplugin=annobin"
+
+# https://sourceware.org/annobin/annobin.html/Test-cf-protection.html
+C_FLAGS="$C_FLAGS -fcf-protection=full"
+
+# https://sourceware.org/annobin/annobin.html/Test-optimization.html
+C_FLAGS="$C_FLAGS -O2"
+
+# https://sourceware.org/annobin/annobin.html/Test-glibcxx-assertions.html
+C_FLAGS="$C_FLAGS -D_GLIBCXX_ASSERTIONS"
+
+# https://sourceware.org/annobin/annobin.html/Test-lto.html
+C_FLAGS="$C_FLAGS -fno-lto"
+%endif
+
 pkgs=base\
 %{?with_server:,server}\
 %{?with_ca:,ca}\
@@ -848,10 +879,12 @@ pkgs=base\
     --sysconf-dir=%{_sysconfdir} \
     --share-dir=%{_datadir} \
     --cmake=%{__cmake} \
+    --c-flags="$C_FLAGS" \
     --java-home=%{java_home} \
     --jni-dir=%{_jnidir} \
     --unit-dir=%{_unitdir} \
-    --python=%{python_executable} \
+    --python=%{python3} \
+    --python-dir=%{python3_sitelib} \
     --with-pkgs=$pkgs \
     %{?with_console:--with-console} \
     %{!?with_test:--without-test} \
@@ -972,7 +1005,7 @@ fi
 %{_datadir}/pki/examples/java/
 %{_datadir}/pki/lib/*.jar
 %dir %{_javadir}/pki
-%{_javadir}/pki/pki-certsrv.jar
+%{_javadir}/pki/pki-common.jar
 
 ################################################################################
 %files -n python3-%{product_id}
@@ -1093,7 +1126,7 @@ fi
 %dir %{_sysconfdir}/systemd/system/pki-tomcatd-nuxwdog.target.wants
 %attr(644,-,-) %{_unitdir}/pki-tomcatd-nuxwdog@.service
 %attr(644,-,-) %{_unitdir}/pki-tomcatd-nuxwdog.target
-%{_javadir}/pki/pki-cms.jar
+%{_javadir}/pki/pki-server.jar
 %{_javadir}/pki/pki-tomcat.jar
 %dir %{_sharedstatedir}/pki
 %{_mandir}/man1/pkidaemon.1.gz
@@ -1274,6 +1307,9 @@ fi
 
 ################################################################################
 %changelog
+* Mon Jun 05 2023 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.4.2-1
+- Rebase to PKI 11.4.2
+
 * Mon Jan 30 2023 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.3.0-1
 - Rebase to PKI 11.3.0
 - Bug #2091993 - IdM Install fails on RHEL 8.5 Beta when DISA STIG is applied
