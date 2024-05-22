@@ -13,9 +13,9 @@ License:          GPLv2 and LGPLv2
 # For development (i.e. unsupported) releases, use x.y.z-0.n.<phase>.
 # For official (i.e. supported) releases, use x.y.z-r where r >=1.
 %global           release_number 1
-Version:          10.14.3
+Version:          10.15.0
 Release:          %{?release_number}%{?_timestamp}%{?_commit_id}%{?dist}
-#global           _phase
+#global           _phase -alpha1
 
 # To create a tarball from a version tag:
 # $ git archive \
@@ -34,7 +34,6 @@ Source: https://github.com/dogtagpki/pki/archive/v%{version}%{?_phase}/pki-%{ver
 
 # md2man isn't available on i686. Additionally, we aren't generally multi-lib
 # compatible (https://fedoraproject.org/wiki/Packaging:Java)
-# md2man has now also been dropped in RHEL 8 so exlcude from RHEL 8+
 %if ! 0%{?rhel} || 0%{?rhel} >= 8
 ExcludeArch: i686
 %endif
@@ -175,7 +174,7 @@ BuildRequires:    zip
 BuildRequires:    %{java_devel}
 BuildRequires:    javapackages-tools
 BuildRequires:    redhat-rpm-config
-BuildRequires:    ldapjdk >= 4.23.0, ldapjdk < 5.0.0
+BuildRequires:    ldapjdk >= 4.24.0, ldapjdk < 5.0.0
 BuildRequires:    apache-commons-cli
 BuildRequires:    apache-commons-codec
 BuildRequires:    apache-commons-io
@@ -210,18 +209,14 @@ BuildRequires:    python3-libselinux
 BuildRequires:    python3-requests >= 2.6.0
 BuildRequires:    python3-six
 
+BuildRequires:    tomcat
+
 BuildRequires:    junit
 BuildRequires:    jpackage-utils >= 0:1.7.5-10
-BuildRequires:    jss >= 4.9.0, jss < 5.0.0
-BuildRequires:    tomcatjss >= 7.7.0, tomcatjss < 8.0.0
+BuildRequires:    jss >= 4.11.0, jss < 5.0.0
+BuildRequires:    tomcatjss >= 7.8.0, tomcatjss < 8.0.0
 
 BuildRequires:    systemd-units
-
-%if 0%{?rhel} && ! 0%{?eln}
-BuildRequires:    pki-servlet-engine
-%else
-BuildRequires:    tomcat >= 1:9.0.7
-%endif
 
 # additional build requirements needed to build native 'tpsclient'
 # REMINDER:  Revisit these once 'tpsclient' is rewritten as a Java app
@@ -338,7 +333,7 @@ Provides:         pki-symkey = %{version}-%{release}
 
 Requires:         %{java_headless}
 Requires:         jpackage-utils >= 0:1.7.5-10
-Requires:         jss >= 4.9.0, jss < 5.0.0
+Requires:         jss >= 4.11.0, jss < 5.0.0
 Requires:         nss >= 3.38.0
 
 # Ensure we end up with a useful installation
@@ -426,8 +421,8 @@ Requires:         glassfish-jaxb-api
 Requires:         slf4j
 Requires:         slf4j-jdk14
 Requires:         jpackage-utils >= 0:1.7.5-10
-Requires:         jss >= 4.9.0, jss < 5.0.0
-Requires:         ldapjdk >= 4.23.0, ldapjdk < 5.0.0
+Requires:         jss >= 4.11.0, jss < 5.0.0
+Requires:         ldapjdk >= 4.24.0, ldapjdk < 5.0.0
 Requires:         %{product_id}-base = %{version}-%{release}
 
 %if 0%{?rhel} && 0%{?rhel} <= 8
@@ -507,11 +502,7 @@ Requires:         python3-policycoreutils
 
 Requires:         selinux-policy-targeted >= 3.13.1-159
 
-%if 0%{?rhel} && ! 0%{?eln}
-Requires:         pki-servlet-engine
-%else
-Requires:         tomcat >= 1:9.0.7
-%endif
+Requires:         tomcat
 
 Requires:         sudo
 Requires:         systemd
@@ -519,7 +510,7 @@ Requires(post):   systemd-units
 Requires(preun):  systemd-units
 Requires(postun): systemd-units
 Requires(pre):    shadow-utils
-Requires:         tomcatjss >= 7.7.0, tomcatjss < 8.0.0
+Requires:         tomcatjss >= 7.8.0, tomcatjss < 8.0.0
 
 # pki-healthcheck depends on the following library
 %if 0%{?rhel}
@@ -784,9 +775,9 @@ BuildArch:        noarch
 Obsoletes:        pki-console < %{version}-%{release}
 Provides:         pki-console = %{version}-%{release}
 
-BuildRequires:    idm-console-framework >= 1.2.0, idm-console-framework < 2.0.0
+BuildRequires:    idm-console-framework >= 1.4.0, idm-console-framework < 2.0.0
 
-Requires:         idm-console-framework >= 1.2.0, idm-console-framework < 2.0.0
+Requires:         idm-console-framework >= 1.4.0, idm-console-framework < 2.0.0
 Requires:         %{product_id}-base-java = %{version}-%{release}
 Requires:         %{product_id}-console-theme = %{version}-%{release}
 
@@ -1403,6 +1394,15 @@ fi
 
 ################################################################################
 %changelog
+* Thu Feb 08 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.0-1
+- Rebase to PKI 10.15.0
+
+* Tue Jan 16 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.0-0.1
+- Rebase to PKI 10.15.0-alpha1
+
+* Mon Jan 15 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.14.3-2
+- Replace pki-servlet-engine with tomcat
+
 * Fri Feb 03 2023 Red Hat PKI Team <rhcs-maint@redhat.com> 10.14.3-1
 - Rebase to PKI 10.14.3
 - Bug 1959057 - An error has ocorred (IPA Error 4301:CertificateOperationError)
