@@ -14,7 +14,7 @@ Name:             pki-core
 # Downstream release number:
 # - development/stabilization (unsupported): 0.<n> where n >= 1
 # - GA/update (supported): <n> where n >= 1
-%global           release_number 1
+%global           release_number 2
 
 # Development phase:
 # - development (unsupported): alpha<n> where n >= 1
@@ -46,6 +46,7 @@ Source: https://github.com/dogtagpki/pki/archive/v%{version}%{?phase:-}%{?phase}
 #     <version tag> \
 #     > pki-VERSION-RELEASE.patch
 # Patch: pki-VERSION-RELEASE.patch
+Patch: 0001-CVE-2023-4727-Fix-token-authentication-bypass-vulner.patch
 
 %if 0%{?java_arches:1}
 ExclusiveArch: %{java_arches}
@@ -1501,6 +1502,9 @@ fi
 
 ################################################################################
 %changelog
+* Thu Mar 28 2024 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.5.0-2
+- RHEL-9916 CVE-2023-4727 pki-core: dogtag ca: token authentication bypass vulnerability
+
 * Wed Feb 21 2024 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.5.0-1
 - Rebase to PKI 11.5.0
 
