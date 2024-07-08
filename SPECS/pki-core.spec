@@ -13,7 +13,7 @@ License:          GPLv2 and LGPLv2
 # For development (i.e. unsupported) releases, use x.y.z-0.n.<phase>.
 # For official (i.e. supported) releases, use x.y.z-r where r >=1.
 %global           release_number 1
-Version:          10.15.0
+Version:          10.15.1
 Release:          %{?release_number}%{?_timestamp}%{?_commit_id}%{?dist}
 #global           _phase -alpha1
 
@@ -1394,6 +1394,10 @@ fi
 
 ################################################################################
 %changelog
+* Fri Jun 14 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.1-1
+- Rebase to PKI 10.15.1
+- Fix CVE 2023-4727
+
 * Thu Feb 08 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.0-1
 - Rebase to PKI 10.15.0
 
