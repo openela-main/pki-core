@@ -9,12 +9,12 @@ Name:             pki-core
 # Upstream version number:
 %global           major_version 11
 %global           minor_version 5
-%global           update_version 0
+%global           update_version 1
 
 # Downstream release number:
 # - development/stabilization (unsupported): 0.<n> where n >= 1
 # - GA/update (supported): <n> where n >= 1
-%global           release_number 2
+%global           release_number 1
 
 # Development phase:
 # - development (unsupported): alpha<n> where n >= 1
@@ -46,7 +46,6 @@ Source: https://github.com/dogtagpki/pki/archive/v%{version}%{?phase:-}%{?phase}
 #     <version tag> \
 #     > pki-VERSION-RELEASE.patch
 # Patch: pki-VERSION-RELEASE.patch
-Patch: 0001-CVE-2023-4727-Fix-token-authentication-bypass-vulner.patch
 
 %if 0%{?java_arches:1}
 ExclusiveArch: %{java_arches}
@@ -64,9 +63,27 @@ ExcludeArch: i686
 # Java
 ################################################################################
 
-%global java_devel java-17-openjdk-devel
-%global java_headless java-17-openjdk-headless
-%global java_home %{_jvmdir}/jre-17-openjdk
+%if 0%{?rhel}
+
+%define java_devel java-17-openjdk-devel
+%define java_headless java-17-openjdk-headless
+%define java_home %{_jvmdir}/jre-17-openjdk
+
+%else
+
+# Use Java 21 on Fedora 40+, otherwise use Java 17.
+%global java_devel java-devel >= 1:17
+%global java_headless java-headless >= 1:17
+
+# Don't use find since it might not work well with local builds.
+#   find {_jvmdir} -maxdepth 1 | grep "jre-[0-9]\+$"
+%global java_home %(
+   source /usr/share/java-utils/java-functions;
+   _prefer_jre=true;
+   set_jvm;
+   echo $JAVA_HOME)
+
+%endif
 
 ################################################################################
 # Application Server
@@ -1012,6 +1029,7 @@ popd
 
 # Remove all symbol table and relocation information from the executable.
 C_FLAGS="-s"
+CXX_FLAGS="$CXX_FLAGS -g -fPIE -pie"
 
 %if 0%{?fedora}
 # https://sourceware.org/annobin/annobin.html/Test-gaps.html
@@ -1022,12 +1040,23 @@ C_FLAGS="$C_FLAGS -fcf-protection=full"
 
 # https://sourceware.org/annobin/annobin.html/Test-optimization.html
 C_FLAGS="$C_FLAGS -O2"
+CXX_FLAGS="$CXX_FLAGS -O2"
 
 # https://sourceware.org/annobin/annobin.html/Test-glibcxx-assertions.html
 C_FLAGS="$C_FLAGS -D_GLIBCXX_ASSERTIONS"
+CXX_FLAGS="$CXX_FLAGS -D_GLIBCXX_ASSERTIONS"
 
 # https://sourceware.org/annobin/annobin.html/Test-lto.html
 C_FLAGS="$C_FLAGS -fno-lto"
+
+# https://sourceware.org/annobin/annobin.html/Test-fortify.html
+C_FLAGS="$C_FLAGS -D_FORTIFY_SOURCE=3"
+CXX_FLAGS="$CXX_FLAGS -D_FORTIFY_SOURCE=3"
+
+# https://sourceware.org/annobin/annobin.html/Test-stack-clash.html
+C_FLAGS="$C_FLAGS -fstack-clash-protection"
+CXX_FLAGS="$CXX_FLAGS -fstack-clash-protection"
+
 %endif
 
 pkgs=base\
@@ -1061,6 +1090,7 @@ pkgs=base\
     --share-dir=%{_datadir} \
     --cmake=%{__cmake} \
     --c-flags="$C_FLAGS" \
+    --cxx-flags="$CXX_FLAGS" \
     --java-home=%{java_home} \
     --jni-dir=%{_jnidir} \
     --unit-dir=%{_unitdir} \
@@ -1502,8 +1532,8 @@ fi
 
 ################################################################################
 %changelog
-* Thu Mar 28 2024 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.5.0-2
-- RHEL-9916 CVE-2023-4727 pki-core: dogtag ca: token authentication bypass vulnerability
+* Fri Jun 21 2024 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.5.1-1
+- Rebase to PKI 11.5.1
 
 * Wed Feb 21 2024 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.5.0-1
 - Rebase to PKI 11.5.0
