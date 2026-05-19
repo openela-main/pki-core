@@ -10,7 +10,7 @@ Name:             pki-core
 # Upstream version number:
 %global           major_version 11
 %global           minor_version 7
-%global           update_version 0
+%global           update_version 1
 
 # Downstream release number:
 # - development/stabilization (unsupported): 0.<n> where n >= 1
@@ -2034,6 +2034,9 @@ fi
 
 ################################################################################
 %changelog
+* Mon Nov 17 2025 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.7.1-1
+- Rebase to PKI 11.7.1
+
 * Tue Aug 05 2025 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.7.0-1
 - Rebase to PKI 11.7.0
 
