@@ -12,7 +12,7 @@ License:          GPLv2 and LGPLv2
 
 # For development (i.e. unsupported) releases, use x.y.z-0.n.<phase>.
 # For official (i.e. supported) releases, use x.y.z-r where r >=1.
-%global           release_number 1
+%global           release_number 2
 Version:          10.15.1
 Release:          %{?release_number}%{?_timestamp}%{?_commit_id}%{?dist}
 #global           _phase -alpha1
@@ -31,6 +31,7 @@ Source: https://github.com/dogtagpki/pki/archive/v%{version}%{?_phase}/pki-%{ver
 #     <version tag> \
 #     > pki-VERSION-RELEASE.patch
 # Patch: pki-VERSION-RELEASE.patch
+Patch1: 0001-Fix-ipa-replica-external-CA..patch
 
 # md2man isn't available on i686. Additionally, we aren't generally multi-lib
 # compatible (https://fedoraproject.org/wiki/Packaging:Java)
@@ -1394,6 +1395,9 @@ fi
 
 ################################################################################
 %changelog
+* Mon May 04 2026 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.1-2
+- Bug RHEL-141365 - Install replica fails when LDAP/DIRSRV Server certs are signed by an External CA
+
 * Fri Jun 14 2024 Red Hat PKI Team <rhcs-maint@redhat.com> 10.15.1-1
 - Rebase to PKI 10.15.1
 - Fix CVE 2023-4727
