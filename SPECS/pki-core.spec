@@ -15,7 +15,7 @@ Name:             pki-core
 # Downstream release number:
 # - development/stabilization (unsupported): 0.<n> where n >= 1
 # - GA/update (supported): <n> where n >= 1
-%global           release_number 1
+%global           release_number 2
 
 # Development phase:
 # - development (unsupported): alpha<n> where n >= 1
@@ -47,6 +47,8 @@ Source: https://github.com/dogtagpki/pki/archive/v%{version}%{?phase:-}%{?phase}
 #     <version tag> \
 #     > pki-VERSION-RELEASE.patch
 # Patch: pki-VERSION-RELEASE.patch
+Patch: pki-ftweedal-0000-Add-ExternalProcessConstraint-executable-allow-list-11.6.patch
+Patch: 0001-Fix-CVE-2026-80110.patch
 
 %if 0%{?java_arches:1}
 ExclusiveArch: %{java_arches}
@@ -2034,6 +2036,10 @@ fi
 
 ################################################################################
 %changelog
+* Sat Sep 19 2026 Fraser Tweedale <ftweedal@redhat.com> - 11.7.0-2
+- RHEL-245465 CVE-2026-76561 pki-core: ExternalProcessConstraint executable allow-list
+- RHEL-248586 CVE-2026-80110 pki-core: ACLFilter sort order fix
+
 * Mon Nov 17 2025 Red Hat PKI Team <rhcs-maint@redhat.com> - 11.7.1-1
 - Rebase to PKI 11.7.1
 
