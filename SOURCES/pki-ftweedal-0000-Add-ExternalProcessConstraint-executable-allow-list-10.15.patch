@@ -1,0 +1,204 @@
+From b1be67541a30d97f0e7e8004836457a6b3cb0433 Mon Sep 17 00:00:00 2001
+From: Fraser Tweedale <ftweedal@redhat.com>
+Date: Fri, 21 Aug 2026 01:26:12 +1000
+Subject: [PATCH] Add ExternalProcessConstraint executable allow-list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fixes CVE-2026-76561.
+
+ExternalProcessConstraint executes an external program during
+certificate request validation.  The path of the executable is a
+profile configuration parameter ("executable").
+
+Because certificate profiles can be created and modified via the
+Dogtag REST API (and via FreeIPA's certprofile-import command),
+a user with CA Administrator privileges could import a profile
+that references an arbitrary executable.  When a certificate
+request is subsequently submitted against that profile, the
+executable runs as pkiuser, achieving code execution on the CA
+server.  This is a privilege escalation: a CA Administrator
+should be able to manage profiles and certificates, but should
+not be able to execute arbitrary commands on the server.
+
+The fix adds a server-side allowlist of permitted executables.
+The allowlist is configured in CS.cfg, which is only writable
+by users with filesystem access to the CA server (root or
+pkiuser) and is not exposed via any REST API:
+
+    ca.externalProcessConstraint.allowedExecutables=/usr/libexec/pki/my-hook
+
+Only exact, complete absolute paths are matched — no globs or
+directory prefixes.  If the parameter is absent or empty, no
+executables are permitted and any profile using this constraint
+will fail to load (deny by default).
+
+The check is enforced in ExternalProcessConstraint.init() - that is,
+when Dogtag loads the profile, whether on startup, or when
+initialising a newly added profile or re-initialising a modified
+profile.
+
+Assisted-by: Claude Opus 4.6 <noreply@anthropic.com>
+
+Adapted for pki 10.15.1 (rhel-8.10.z / RHEL-245455) by
+Alessandro Garagna <agaragna@redhat.com>.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ .../constraint/ExternalProcessConstraint.java | 63 +++++++++++++++++++
+ .../org/dogtagpki/server/ca/CAConfig.java     | 39 ++++++++++++
+ 2 files changed, 102 insertions(+)
+
+diff --git a/base/ca/src/main/java/com/netscape/cms/profile/constraint/ExternalProcessConstraint.java b/base/ca/src/main/java/com/netscape/cms/profile/constraint/ExternalProcessConstraint.java
+index 1be2d56..ce09183 100644
+--- a/base/ca/src/main/java/com/netscape/cms/profile/constraint/ExternalProcessConstraint.java
++++ b/base/ca/src/main/java/com/netscape/cms/profile/constraint/ExternalProcessConstraint.java
+@@ -19,12 +19,14 @@
+ package com.netscape.cms.profile.constraint;
+ 
+ import java.util.Enumeration;
++import java.util.List;
+ import java.util.Locale;
+ import java.util.Map;
+ import java.util.TreeMap;
+ import java.util.concurrent.TimeUnit;
+ 
+ import org.apache.commons.io.IOUtils;
++import org.dogtagpki.server.ca.CAEngine;
+ import org.mozilla.jss.netscape.security.x509.X509CertInfo;
+ 
+ import com.netscape.certsrv.authentication.IAuthToken;
+@@ -38,6 +40,52 @@ import com.netscape.certsrv.request.IRequest;
+ import com.netscape.cms.profile.input.CertReqInput;
+ 
+ 
++/**
++ * Profile policy constraint that validates a certificate request
++ * by executing an external process.  The process receives
++ * request data via environment variables and indicates approval
++ * by exiting with status 0 (non-zero rejects the request).
++ *
++ * <h2>Profile configuration parameters</h2>
++ * <dl>
++ *   <dt>{@code executable}</dt>
++ *   <dd>Absolute path of the program to execute.  Required.</dd>
++ *   <dt>{@code timeout}</dt>
++ *   <dd>Maximum execution time in seconds (default&nbsp;10).
++ *       The process is killed if the timeout expires and the
++ *       request is rejected.</dd>
++ * </dl>
++ *
++ * <h2>Security: executable allowlist</h2>
++ *
++ * Because certificate profiles can be created and modified via
++ * the REST API, the {@code executable} parameter is checked
++ * against an allowlist in CS.cfg at profile load time:
++ *
++ * <pre>
++ * ca.externalProcessConstraint.allowedExecutables=/usr/libexec/pki/ipa-cert-check,/usr/libexec/pki/other-hook
++ * </pre>
++ *
++ * Only exact, complete absolute paths are matched (no globs or
++ * directory prefixes).  If the parameter is absent or empty, no
++ * executables are permitted and any profile that uses this
++ * constraint will fail to load.
++ *
++ * <h2>Environment variables</h2>
++ *
++ * The following variables are set in the process environment
++ * (values come from the certificate request):
++ * <ul>
++ *   <li>{@code DOGTAG_CERT_REQUEST} &ndash; the PEM certificate request</li>
++ *   <li>{@code DOGTAG_USER} &ndash; authenticated user ID</li>
++ *   <li>{@code DOGTAG_PROFILE_ID} &ndash; profile that is being used</li>
++ *   <li>{@code DOGTAG_AUTHORITY_ID} &ndash; issuing authority ID</li>
++ *   <li>{@code DOGTAG_USER_DATA} &ndash; opaque user-supplied data</li>
++ * </ul>
++ *
++ * Additional environment variables can be configured via
++ * {@code params.env.*} sub-keys in the constraint configuration.
++ */
+ public class ExternalProcessConstraint extends EnrollConstraint {
+ 
+     public static org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ExternalProcessConstraint.class);
+@@ -82,6 +130,21 @@ public class ExternalProcessConstraint extends EnrollConstraint {
+                 "Missing required config param 'executable'");
+         }
+ 
++        List<String> allowed;
++        try {
++            allowed = CAEngine.getInstance().getConfig().getCAConfig()
++                .getExternalProcessConstraintAllowedExecutables();
++        } catch (EBaseException e) {
++            throw new EProfileException(
++                "Failed to check executable allowlist: " + e.getMessage(), e);
++        }
++        if (!allowed.contains(this.executable)) {
++            throw new EProfileException(
++                "Executable not in"
++                + " ca.externalProcessConstraint.allowedExecutables:"
++                + " " + this.executable);
++        }
++
+         timeout = DEFAULT_TIMEOUT;
+         String timeoutConfig = getConfig(CONFIG_TIMEOUT);
+         if (this.executable != null && !this.executable.isEmpty()) {
+diff --git a/base/ca/src/main/java/org/dogtagpki/server/ca/CAConfig.java b/base/ca/src/main/java/org/dogtagpki/server/ca/CAConfig.java
+index 18aa5db..df9067f 100644
+--- a/base/ca/src/main/java/org/dogtagpki/server/ca/CAConfig.java
++++ b/base/ca/src/main/java/org/dogtagpki/server/ca/CAConfig.java
+@@ -5,6 +5,11 @@
+ //
+ package org.dogtagpki.server.ca;
+ 
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++
++import com.netscape.certsrv.base.EBaseException;
+ import com.netscape.cmscore.apps.EngineConfig;
+ import com.netscape.cmscore.base.ConfigStorage;
+ import com.netscape.cmscore.base.SimpleProperties;
+@@ -23,4 +28,38 @@ public class CAConfig extends EngineConfig {
+     public PublishingConfig getPublishingConfig() {
+         return getSubStore("publish", PublishingConfig.class);
+     }
++
++    /**
++     * Returns the list of executable paths allowed for use by
++     * ExternalProcessConstraint, from
++     * ca.externalProcessConstraint.allowedExecutables in CS.cfg.
++     *
++     * Each entry must be an absolute path.  If the parameter is
++     * absent or empty, an empty list is returned (no executables
++     * are allowed).
++     *
++     * @return list of allowed absolute paths (may be empty, never null)
++     * @throws EBaseException if a value is empty or not an absolute path
++     */
++    public List<String> getExternalProcessConstraintAllowedExecutables() throws EBaseException {
++        String value = getString("externalProcessConstraint.allowedExecutables", "");
++        if (value == null || value.trim().isEmpty()) {
++            return new ArrayList<>();
++        }
++        List<String> result = Arrays.asList(value.split(","));
++        for (String path : result) {
++            if (path.isEmpty()) {
++                throw new EBaseException(
++                    "ca.externalProcessConstraint.allowedExecutables:"
++                    + " empty value in list");
++            }
++            if (!path.startsWith("/")) {
++                throw new EBaseException(
++                    "ca.externalProcessConstraint.allowedExecutables:"
++                    + " not an absolute path: " + path);
++            }
++        }
++        return result;
++    }
++
+ }
+-- 
+2.55.0
+
